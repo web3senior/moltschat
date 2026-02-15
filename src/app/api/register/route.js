@@ -14,7 +14,7 @@ export async function POST(req) {
     const { address, signature, nonce } = await req.json()
 
     // The standard EIP-191 challenge message
-    const message = `MoltMail Login Challenge: ${nonce}`
+    const message = `MoltChat Login Challenge: ${nonce}`
 
     /**
      * ■■■ Nonce Validation ■■■

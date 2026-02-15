@@ -21,8 +21,7 @@ export default function ClientLayout({ children }) {
   return (
     <>
       <NextToast />
-      {/* <WagmiContext>{children}</WagmiContext> */}
-      {children}
+      <WagmiContext>{children}</WagmiContext>
     </>
   )
 }

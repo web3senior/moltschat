@@ -1,9 +1,6 @@
 import Web3 from 'web3'
 import { config, CONTRACTS, setNetworkColor } from '@/config/wagmi'
 import chatAbi from '@/lib/abi/chat.json'
-import { db } from '@/lib/db'
-
-
 
 export const getActiveChain = (connectedChainId) => {
   // 1. Prioritize the chain ID passed from Wagmi's useAccount/useChainId
@@ -11,30 +8,29 @@ export const getActiveChain = (connectedChainId) => {
   // 3. Fall back to hardcoded Default
   const DEFAULT_CHAIN_ID = 143 // Monad
 
-  let targetId = DEFAULT_CHAIN_ID;
+  let targetId = DEFAULT_CHAIN_ID
 
   if (connectedChainId) {
-    targetId = connectedChainId;
+    targetId = connectedChainId
   } else if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem(`${process.env.NEXT_PUBLIC_LOCALSTORAGE_PREFIX}active-chain`);
-    if (saved) targetId = parseInt(saved);
+    const saved = localStorage.getItem(`${process.env.NEXT_PUBLIC_LOCALSTORAGE_PREFIX}active-chain`)
+    if (saved) targetId = parseInt(saved)
   }
 
-  const userSelectedChain = config.chains.find((c) => c.id.toString() === targetId.toString());
+  const userSelectedChain = config.chains.find((c) => c.id.toString() === targetId.toString())
 
   if (userSelectedChain) {
     // Only run side-effects on client
     if (typeof window !== 'undefined') {
-      setNetworkColor(userSelectedChain);
+      setNetworkColor(userSelectedChain)
     }
-    return [userSelectedChain, CONTRACTS[`chain${userSelectedChain.id}`]];
+    return [userSelectedChain, CONTRACTS[`chain${userSelectedChain.id}`]]
   }
 
   // Fallback
-  const defaultChain = config.chains.find((c) => c.id === DEFAULT_CHAIN_ID);
-  return [defaultChain, CONTRACTS[`chain${DEFAULT_CHAIN_ID}`]];
+  const defaultChain = config.chains.find((c) => c.id === DEFAULT_CHAIN_ID)
+  return [defaultChain, CONTRACTS[`chain${DEFAULT_CHAIN_ID}`]]
 }
-
 
 // Initialize chat contract
 export function initChatContract() {
@@ -73,84 +69,6 @@ export async function getPublicKeyRegistry(address) {
   } catch (error) {
     console.error('Error fetching contract data with Web3.js:', error)
     return { error }
-  }
-}
-
-export async function getConversationList(userAddress, offset = 0, limit = 50) {
-  const { contract } = initChatContract()
-
-  try {
-    const localFriends = await db.friends.toArray()
-
-    const conversations = await Promise.all(
-      localFriends.map(async (friend) => {
-        let lastMessage = { timestamp: 0, snippet: 'No messages' }
-
-        try {
-          // Get the very last message reference for the snippet
-          const historyData = await contract.methods.getTopicHistory(friend.topic, 0, 1).call()
-          const latestMsg = historyData[0][0]
-
-          if (latestMsg) {
-            // Note: In a production app, you might decrypt the snippet
-            // or store a local unencrypted snippet to avoid heavy IPFS calls here.
-            lastMessage = {
-              timestamp: Number(latestMsg.timestamp),
-              snippet: 'New message',
-            }
-          }
-        } catch (e) {
-          /* No history yet */
-        }
-
-        return {
-          ...friend,
-          lastMessage,
-        }
-      }),
-    )
-
-    // SIDEBAR LOGIC: Newest activity at index 0 (Top of the list)
-    return conversations.sort((a, b) => b.lastMessage.timestamp - a.lastMessage.timestamp)
-  } catch (error) {
-    console.error('Sidebar fetch failed:', error)
-    return []
-  }
-}
-
-export async function getPaginatedConversationHistory(topic, offset = 0, limit = 20) {
-  const { contract } = initChatContract()
-
-  try {
-    // contract returns: [NewestMessage, SecondNewest, ..., OldestMessage]
-    const result = await contract.methods.getTopicHistory(topic, offset, limit).call()
-
-    const messages = result[0]
-    const totalCount = Number(result[1])
-
-    const formattedMessages = messages.map((msg) => ({
-      sender: msg.sender,
-      timestamp: Number(msg.timestamp),
-      cidHash: msg.cidHash,
-      fullCID: msg.fullCID,
-      encryptedKey: msg.encryptedKey,
-      isEdited: msg.isEdited,
-      isDeleted: msg.isDeleted,
-    }))
-
-    /**
-     * FOR THE CHAT WINDOW:
-     * We receive: [10:05 PM, 10:04 PM, 10:03 PM]
-     * We need:    [10:03 PM, 10:04 PM, 10:05 PM]
-     * So the .map() in React renders the newest message at the BOTTOM.
-     */
-    return {
-      messages: formattedMessages.reverse(),
-      totalMessages: totalCount,
-    }
-  } catch (error) {
-    console.error('Error fetching topic history:', error)
-    return { messages: [], totalMessages: 0 }
   }
 }
 

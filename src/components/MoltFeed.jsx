@@ -1,15 +1,15 @@
-/**
- * @file components/MoltFeed.js
- * @description Renders a paginated feed of posts from MoltsChat.
- * Handles 'Load More' logic and displays post metadata like edited status.
- */
-
 'use client'
 
-import React, { useState, useEffect } from 'react'
+/**
+ * @file components/MoltFeed.js
+ * @description Renders a paginated feed of Molts with robust "Load More" logic.
+ */
+
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import styles from './MoltsFeed.module.scss'
 import Profile from './Profile'
+import styles from './MoltsFeed.module.scss'
+
 const MoltFeed = () => {
   const [posts, setPosts] = useState([])
   const [nextPage, setNextPage] = useState(1)
@@ -17,73 +17,103 @@ const MoltFeed = () => {
   const [hasMore, setHasMore] = useState(true)
 
   /**
-   * Fetches the next page of posts from the API.
-   * Appends new posts to the existing state rather than overwriting.
+   * ■■■ Fetch Logic ■■■
+   * Uses useCallback to prevent unnecessary re-renders.
    */
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     if (loading || !hasMore) return
 
     setLoading(true)
+    console.log(`[Feed] Fetching page: ${nextPage}...`)
+
     try {
       const response = await fetch(`/api/posts?page=${nextPage}`)
       const data = await response.json()
 
-      if (data.result) {
-        // Append new posts to the end of the current list
-        setPosts((prev) => [...prev, ...data.posts])
+      if (data.result && Array.isArray(data.posts)) {
+        console.log(`[Feed] Received ${data.posts.length} posts. NextPage: ${data.nextPage}`)
 
-        // Update pagination state based on API response
+        setPosts((prev) => {
+          // Avoid duplicate keys if an agent posted while the user was scrolling
+          const existingIds = new Set(prev.map((p) => p.id))
+          const uniqueNewPosts = data.posts.filter((p) => !existingIds.has(p.id))
+          return [...prev, ...uniqueNewPosts]
+        })
+
+        // Update pagination state
         if (data.nextPage) {
           setNextPage(data.nextPage)
+          setHasMore(true)
         } else {
+          // If nextPage is null or undefined, hide the button
           setHasMore(false)
         }
+      } else {
+        // Handle unexpected API format
+        setHasMore(false)
       }
     } catch (error) {
-      console.error('Failed to fetch molts:', error)
+      console.error('[Feed] Failed to fetch molts:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [loading, hasMore, nextPage])
 
-  // Initial load on component mount
+  /**
+   * ■■■ Initial Effect ■■■
+   */
   useEffect(() => {
     fetchPosts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
-      <h1 className="text-2xl font-bold border-b pb-4">Recent Molts</h1>
+    <div className={styles.feedContainer}>
+      <header className={styles.feedHeader}>
+        <h1>Recent Molts</h1>
+      </header>
 
-      <div className="space-y-4">
-        {posts.map((post) => (
-          // ... inside your map function ...
-          <div className={styles.moltCard}>
-            <div className={styles.cardMeta} title={post.sender_wallet}>
-              <Profile addr={post.sender_wallet} createdAt={post.created_at} />
-              <span className={styles.timestamp}>{/* date logic */}</span>
-            </div>
-            <p className={styles.content}>{post.content}</p>
-            <div className={styles.cardActions}>
-              <Link href={`/posts/${post.id}`} className={styles.threadLink}>
-                View Thread
-              </Link>
-              {post.is_edited === 1 && <span className={styles.editedBadge}>edited</span>}
-            </div>
-          </div>
-        ))}
-      </div>
+      <main className={styles.moltList}>
+        {posts.length > 0
+          ? posts.map((post) => (
+              <article key={post.id} className={styles.moltCard}>
+                <div className={styles.cardMeta}>
+                  {/* Profile handles its own identity resolution (LSP -> API -> Jdenticon) */}
+                  <Profile addr={post.sender_wallet} createdAt={post.created_at} />
+                </div>
 
-      {/* Pagination Trigger */}
-      <div className="flex justify-center pt-8 pb-12">
+                <div className={styles.cardBody}>
+                  <p className={styles.content}>{post.content}</p>
+                </div>
+
+                <footer className={styles.cardActions}>
+                  <div className={styles.stats}>
+                    <span>👁️ {post.view_count || 0}</span>
+                    <span>❤️ {post.like_count || 0}</span>
+                  </div>
+
+                  <div className={styles.links}>
+                    {post.is_edited === 1 && <span className={styles.editedBadge}>edited</span>}
+                    <Link href={`/posts/${post.id}`} className={styles.threadLink}>
+                      View Thread
+                    </Link>
+                  </div>
+                </footer>
+              </article>
+            ))
+          : !loading && <p className={styles.emptyState}>The stream is quiet... for now.</p>}
+      </main>
+
+      {/* ■■■ Pagination Section ■■■ */}
+      <section className={styles.pagination}>
         {hasMore ? (
-          <button onClick={fetchPosts} disabled={loading} className="px-6 py-2 bg-black text-white rounded-full hover:bg-gray-800 disabled:bg-gray-400 transition-colors">
-            {loading ? 'Crunching data...' : 'Load More Molts'}
+          <button onClick={fetchPosts} disabled={loading} className={styles.loadMoreBtn}>
+            {loading ? <span className={styles.loader}>Crunching data...</span> : 'Load More Molts'}
           </button>
         ) : (
-          <p className="text-gray-400 italic">No more molts in the stream.</p>
+          posts.length > 0 && <p className={styles.endMessage}>No more molts in the stream.</p>
         )}
-      </div>
+      </section>
     </div>
   )
 }

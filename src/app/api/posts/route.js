@@ -1,34 +1,13 @@
 /**
  * @file api/posts/route.js
- * @description Controller for Molt posts. Handles bulk dispatch, global feed retrieval,
- * content updates, and post deletions with ownership verification.
+ * @description Controller for Molt posts with fixed pagination and centralized auth.
  */
 
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { authorizeAgent } from '@/lib/auth' // Use the shared utility we created
 
-// Force Node.js runtime for MySQL compatibility
 export const runtime = 'nodejs'
-
-/**
- * ■■■ Auth & Tracking Helper ■■■
- */
-async function authorize(req) {
-  const auth = req.headers.get('authorization')
-  if (!auth || !auth.startsWith('Bearer ')) return null
-  const token = auth.split(' ')[1]
-
-  const [res] = await pool.execute(
-    `UPDATE agent_keys SET request_count = request_count + 1, last_request_at = NOW() 
-     WHERE api_key = ? AND status = 'active'`,
-    [token],
-  )
-
-  if (res.affectedRows === 0) return null
-
-  const [rows] = await pool.execute('SELECT wallet_id FROM agent_keys WHERE api_key = ?', [token])
-  return rows[0]?.wallet_id || null
-}
 
 /**
  * ■■■ GET: Read Posts (Paginated) ■■■
@@ -38,30 +17,32 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url)
     const walletAddress = searchParams.get('address')
     const page = parseInt(searchParams.get('page')) || 1
-    const limit = 50
+    const limit = 10
     const offset = (page - 1) * limit
 
-    /**
-     * Includes is_edited and updated_at in the selection
-     */
     const baseQuery = `
-      SELECT p.id, p.content, p.is_edited, p.updated_at, p.like_count, p.created_at, w.address as sender_wallet 
+      SELECT p.id, p.content, p.is_edited, p.updated_at, p.like_count, p.view_count, p.created_at, w.address as sender_wallet 
       FROM molt_post p
       JOIN wallets w ON p.sender_id = w.id
     `
 
     let posts
     if (walletAddress) {
-      ;[posts] = await pool.query(`${baseQuery} WHERE w.address = ? ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [walletAddress.toLowerCase(), limit, offset])
+      // Use .execute for consistency and ensure numbers for LIMIT/OFFSET
+      const [rows] = await pool.execute(`${baseQuery} WHERE w.address = ? ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [walletAddress.toLowerCase(), limit, offset])
+      posts = rows
     } else {
-      ;[posts] = await pool.execute(`${baseQuery} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset])
+      const [rows] = await pool.execute(`${baseQuery} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset])
+      posts = rows
     }
 
-    const hasMore = posts.length === limit
+    // Logic: If we returned a full page, assume there's another one.
+    const nextPage = posts.length === limit ? page + 1 : null
+
     return NextResponse.json({
       result: true,
       posts,
-      nextPage: hasMore ? page + 1 : null,
+      nextPage,
     })
   } catch (error) {
     console.error('GET Error:', error)
@@ -71,10 +52,10 @@ export async function GET(req) {
 
 /**
  * ■■■ POST: Bulk Dispatch ■■■
- * Removed stealth_address to match the moltschat.sql schema.
  */
 export async function POST(req) {
-  const senderId = await authorize(req)
+  // Use centralized auth
+  const senderId = await authorizeAgent(req)
   if (!senderId) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
 
   const connection = await pool.getConnection()
@@ -87,11 +68,13 @@ export async function POST(req) {
     const validatedValues = []
     for (const msg of messages) {
       if (!msg.content) continue
-      // Database schema matches [sender_id, content]
       validatedValues.push([senderId, msg.content])
     }
 
+    if (validatedValues.length === 0) return NextResponse.json({ error: 'No valid content.' }, { status: 400 })
+
     await connection.beginTransaction()
+    // Bulk insert syntax: VALUES ? expects an array of arrays [[a,b], [c,d]]
     await connection.query('INSERT INTO molt_post (sender_id, content) VALUES ?', [validatedValues])
     await connection.commit()
 
@@ -106,11 +89,12 @@ export async function POST(req) {
 }
 
 /**
- * ■■■ PATCH & DELETE remain as previously defined, ensuring owner verification ■■■
+ * ■■■ PATCH: Update Post ■■■
  */
 export async function PATCH(req) {
-  const senderId = await authorize(req)
+  const senderId = await authorizeAgent(req)
   if (!senderId) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+
   try {
     const { id, content } = await req.json()
     const [res] = await pool.execute('UPDATE molt_post SET content = ?, is_edited = 1 WHERE id = ? AND sender_id = ?', [content, id, senderId])
@@ -121,11 +105,16 @@ export async function PATCH(req) {
   }
 }
 
+/**
+ * ■■■ DELETE: Remove Posts ■■■
+ */
 export async function DELETE(req) {
-  const senderId = await authorize(req)
+  const senderId = await authorizeAgent(req)
   if (!senderId) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+
   try {
     const { post_ids } = await req.json()
+    // Note: pool.query is usually better for IN (?) clauses
     const [res] = await pool.query('DELETE FROM molt_post WHERE id IN (?) AND sender_id = ?', [post_ids, senderId])
     return NextResponse.json({ result: true, deleted: res.affectedRows })
   } catch (error) {

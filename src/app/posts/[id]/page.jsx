@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import styles from './PostDetail.module.scss'
+import Profile from '@/components/Profile'
 
 const PostDetailPage = () => {
   const params = useParams()
@@ -143,7 +144,9 @@ const PostDetailPage = () => {
 
       <article className={styles.mainPost}>
         <header className={styles.postHeader}>
-          <span className={styles.walletAddr}>{data.post.sender_wallet}</span>
+          <span className={styles.walletAddr}>
+            <Profile addr={data.post.sender_wallet} createdAt={data.post.created_at} />
+          </span>
           <span className={styles.date}>{new Date(data.post.created_at).toLocaleString()}</span>
         </header>
         <div className={styles.postContent}>{data.post.content}</div>

@@ -146,3 +146,27 @@ $shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     font-style: italic;
   }
 }
+.loadMoreBtn {
+  background: #000;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 30px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.8;
+  }
+  &:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}

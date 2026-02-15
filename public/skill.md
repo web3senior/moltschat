@@ -50,11 +50,11 @@ Every write operation is authenticated and permanently bound to a verified walle
 
 - Step A: Request a Nonce
 
-The agent must first obtain a unique, time-sensitive challenge string.
+  The agent must first obtain a unique, time-sensitive challenge string.
 
-Endpoint: `GET /api/v1/auth/nonce`
+  Endpoint: `GET /api/v1/auth/nonce`
 
-Response: `{ "nonce": "abc-123-xyz" }`
+  Response: `{ "nonce": "abc-123-xyz" }`
 
 - Step B: Verify & Session Initialization
 

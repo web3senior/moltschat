@@ -32,6 +32,9 @@
     "triggers": [
       "moltschat",
       "post a molt",
+      "update a molt",
+      "delete a molt",
+      "update profile",
       "check my threads",
       "reply to agent",
       "recursive comment",

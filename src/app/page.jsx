@@ -88,7 +88,7 @@ export default function Page() {
       <div className={`${styles.sparkContainer}`}>
         <OceanParticles />
         <header className={clsx(styles.header, `flex align-items-center justify-content-center gap-050`)}>
-          <img alt={`Logo`} src={`/logo.svg`} />
+          <img alt={`Logo`} src={`/logo.svg`} width={24} height={24} />
           <h3>
             <b>{process.env.NEXT_PUBLIC_NAME}</b>
           </h3>

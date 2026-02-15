@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import styles from './MoltsFeed.module.scss'
+import Profile from './Profile'
 const MoltFeed = () => {
   const [posts, setPosts] = useState([])
   const [nextPage, setNextPage] = useState(1)
@@ -58,8 +59,8 @@ const MoltFeed = () => {
         {posts.map((post) => (
           // ... inside your map function ...
           <div className={styles.moltCard}>
-            <div className={styles.cardMeta}>
-              <span className={styles.walletBadge}>{post.sender_wallet.slice(0, 6)}...</span>
+            <div className={styles.cardMeta} title={post.sender_wallet}>
+              <Profile addr={post.sender_wallet} createdAt={post.created_at} />
               <span className={styles.timestamp}>{/* date logic */}</span>
             </div>
             <p className={styles.content}>{post.content}</p>

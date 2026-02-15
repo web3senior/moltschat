@@ -1,18 +1,23 @@
 'use client'
 
-import { useState, useEffect, useId, useRef, useCallback } from 'react'
+/**
+ * @file components/Profile/Profile.jsx
+ * @description Hybrid Profile component. Resolves LUKSO Universal Profiles (LSP)
+ * first, then falls back to local MoltsChat API, and finally Jdenticon.
+ */
+
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { getProfile, getUniversalProfile } from '@/lib/api'
-import web3 from 'web3'
 import moment from 'moment'
 import { toSvg } from 'jdenticon'
-import { getActiveChain } from '@/lib/communication'
+import { getUniversalProfile } from '@/lib/api' // Your existing LSP helper
 import styles from './Profile.module.scss'
 
-moment.defineLocale('en-short', {
+// Short-hand time configuration
+moment.updateLocale('en', {
   relativeTime: {
     future: 'in %s',
-    past: '%s', //'%s ago'
+    past: '%s',
     s: '1s',
     ss: '%ds',
     m: '1m',
@@ -28,55 +33,102 @@ moment.defineLocale('en-short', {
   },
 })
 
-/**
- * Profile
- * @param {String} addr
- * @returns
- */
 export default function Profile({ addr, createdAt }) {
-  const [profile, setProfile] = useState()
-  const defaultUsername = `tunnel-user`
+  const [profile, setProfile] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    getUniversalProfile(addr).then((res) => {
-      // console.log(res)
-      if (res.data && Array.isArray(res.data.Profile) && res.data.Profile.length > 0 && res.data.Profile[0].isContract) {
-        setIsItUp(true)
-        setProfile({
-          wallet: res.data.id,
-          name: res.data.Profile[0].name,
-          description: res.data.description,
-          profileImage: res.data.Profile[0].profileImages.length > 0 ? res.data.Profile[0].profileImages[0].src : `${process.env.NEXT_PUBLIC_IPFS_GATEWAY}bafkreiatl2iuudjiq354ic567bxd7jzhrixf5fh5e6x6uhdvl7xfrwxwzm`,
-          profileHeader: '',
-          tags: JSON.stringify(res.data.tags),
-          links: JSON.stringify(res.data.links_),
-          lastUpdate: '',
-        })
-      } else {
-        getProfile(addr).then((res) => {
-          //  console.log(res)
-          if (res.wallet) {
-            const profileImage = res.profileImage !== '' ? `${process.env.NEXT_PUBLIC_UPLOAD_URL}${res.profileImage}` : `${process.env.NEXT_PUBLIC_IPFS_GATEWAY}bafkreiatl2iuudjiq354ic567bxd7jzhrixf5fh5e6x6uhdvl7xfrwxwzm`
-            res.profileImage = profileImage
-            setProfile(res)
-          }
-        })
-      }
-    })
-    //${toSvg(`${addr}`, 36)}
-  }, [])
+  const defaultUsername = `agent-${addr?.slice(2, 6)}`
+  const ipfsGateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || 'https://ipfs.io/ipfs/'
 
-  if (!profile)
+  /**
+   * ■■■ Deterministic Fallback ■■■
+   * Used if both Universal Profile and Local API fail to provide an image.
+   */
+  const jdenticonData = useMemo(() => {
+    if (!addr) return null
+    return `data:image/svg+xml;utf8,${encodeURIComponent(toSvg(addr, 40))}`
+  }, [addr])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const resolveIdentity = async () => {
+      if (!addr) return
+      setIsLoading(true)
+
+      try {
+        // --- STEP 1: Check Universal Profile (On-chain) ---
+        const upRes = await getUniversalProfile(addr)
+
+        if (isMounted && upRes?.data?.Profile?.[0]?.isContract) {
+          const upData = upRes.data
+          const upImage = upData.Profile[0].profileImages?.length > 0 ? upData.Profile[0].profileImages[0].src.replace('ipfs://', ipfsGateway) : jdenticonData
+
+          setProfile({
+            name: upData.Profile[0].name || defaultUsername,
+            image: upImage,
+            source: 'universal_profile',
+          })
+          setIsLoading(false)
+          return // Found on-chain, stop here
+        }
+
+        // --- STEP 2: Fallback to Local MoltsChat API ---
+        const localRes = await fetch(`/api/agents/profile/${addr}`)
+        const localData = await localRes.json()
+
+        if (isMounted) {
+          if (localData.success && localData.profile) {
+            setProfile({
+              name: localData.profile.name || defaultUsername,
+              image: localData.profile.image ? `${process.env.NEXT_PUBLIC_UPLOAD_URL}${localData.profile.image}` : jdenticonData,
+              source: 'local_api',
+            })
+          } else {
+            // --- STEP 3: Pure Fallback (Unregistered Agent) ---
+            setProfile({
+              name: defaultUsername,
+              image: jdenticonData,
+              source: 'jdenticon',
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Identity Resolution Error:', err)
+        if (isMounted) setProfile({ name: 'Unknown', image: jdenticonData })
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+
+    resolveIdentity()
+    return () => {
+      isMounted = false
+    }
+  }, [addr, jdenticonData, defaultUsername, ipfsGateway])
+
+  /**
+   * ■■■ Safe Date Parsing ■■■
+   */
+  const formatTime = (time) => {
+    if (!time) return ''
+    // Handle ISO strings from API or Unix timestamps from contract
+    const dateObj = isNaN(Number(time)) ? moment(time) : moment.unix(Number(time))
+    return dateObj.isValid() ? dateObj.fromNow() : ''
+  }
+
+  if (isLoading) {
     return (
       <div className={`${styles.profileShimmer} flex align-items-center gap-050`}>
-        <div className={`shimmer rounded`} style={{ width: `36px`, height: `36px` }} />
-        <div className={`flex flex-column justify-content-between gap-025`}>
-          <span className={`shimmer rounded`} style={{ width: `60px`, height: `10px` }} />
-          <span className={`shimmer rounded`} style={{ width: `40px`, height: `10px` }} />
+        <div className={`shimmer rounded`} style={{ width: 36, height: 36 }} />
+        <div className={`flex flex-column gap-025`}>
+          <div className={`shimmer rounded`} style={{ width: 60, height: 10 }} />
+          <div className={`shimmer rounded`} style={{ width: 40, height: 8 }} />
         </div>
       </div>
     )
+  }
 
   return (
     <figure
@@ -86,75 +138,15 @@ export default function Profile({ addr, createdAt }) {
         router.push(`/u/${addr}`)
       }}
     >
-      <img alt={profile.name || `Default PFP`} src={`${profile.profileImage}`} className={`rounded`} />
+      <img alt={profile?.name} src={profile?.image} className={`${styles.avatar} rounded`} />
 
       <figcaption className={`flex flex-column w-100`}>
         <div className={`flex align-items-center justify-content-between gap-025`}>
-          <b>{profile.name ?? defaultUsername}</b>
-
-          <small className={`text-secondary`}>{moment.unix(web3.utils.toNumber(createdAt)).utc().fromNow()}</small>
+          <b className={styles.name}>{profile?.name}</b>
+          <small className={styles.timestamp}>{formatTime(createdAt)}</small>
         </div>
-        <code className={`text-secondary`}>{`${addr.slice(0, 6)}…${addr.slice(38)}`}</code>
+        <code className={styles.address}>{`${addr.slice(0, 6)}…${addr.slice(-4)}`}</code>
       </figcaption>
-    </figure>
-  )
-}
-
-export function ProfileImage({ addr }) {
-  const [profile, setProfile] = useState()
-  const [isItUp, setIsItUp] = useState()
-  const defaultUsername = `tunnel-user`
-  //   const { web3, contract } = initPostContract()
-  const router = useRouter()
-
-  useEffect(() => {
-    getUniversalProfile(addr).then((res) => {
-      // console.log(res)
-      if (res.data && Array.isArray(res.data.Profile) && res.data.Profile.length > 0) {
-        setIsItUp(true)
-        setProfile({
-          wallet: res.data.id,
-          name: res.data.Profile[0].name,
-          description: res.data.description,
-          profileImage: res.data.Profile[0].profileImages.length > 0 ? res.data.Profile[0].profileImages[0].src : `${process.env.NEXT_PUBLIC_IPFS_GATEWAY}bafkreiatl2iuudjiq354ic567bxd7jzhrixf5fh5e6x6uhdvl7xfrwxwzm`,
-          profileHeader: '',
-          tags: JSON.stringify(res.data.tags),
-          links: JSON.stringify(res.data.links_),
-          lastUpdate: '',
-        })
-      } else {
-        getProfile(addr).then((res) => {
-          //  console.log(res)
-          if (res.wallet) {
-            const profileImage = res.profileImage !== '' ? `${process.env.NEXT_PUBLIC_UPLOAD_URL}${res.profileImage}` : `${process.env.NEXT_PUBLIC_IPFS_GATEWAY}bafkreiatl2iuudjiq354ic567bxd7jzhrixf5fh5e6x6uhdvl7xfrwxwzm`
-            res.profileImage = profileImage
-            setProfile(res)
-          }
-        })
-      }
-    })
-  }, [])
-
-  if (!profile)
-    return (
-      <div className={`${styles.profileShimmer} flex align-items-center gap-050`}>
-        <div className={`shimmer rounded`} style={{ width: `36px`, height: `36px` }} />
-        <div className={`flex flex-column justify-content-between gap-025`}>
-          <span className={`shimmer rounded`} style={{ width: `60px`, height: `10px` }} />
-          <span className={`shimmer rounded`} style={{ width: `40px`, height: `10px` }} />
-        </div>
-      </div>
-    )
-
-  return (
-    <figure
-      className={`${styles.profile} flex align-items-center`}
-      onClick={(e) => {
-        e.stopPropagation()
-        router.push(`/u/${addr}`)
-      }}
-    >
-      <img alt={profile.name || `Default PFP`} src={`${profile.profileImage}`} className={`rounded`} />
     </figure>
   )
 }

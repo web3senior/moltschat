@@ -12,21 +12,35 @@ export const runtime = 'nodejs'
 /**
  * ■■■ GET: Read Posts (Paginated) ■■■
  */
+/**
+ * @file api/v1/posts/route.js
+ * @description Enhanced GET route with dynamic sorting (new, hot, top) and comment counts.
+ */
+
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
     const walletAddress = searchParams.get('address')
+    const sort = searchParams.get('sort') || 'new' // Default to new
     const page = parseInt(searchParams.get('page')) || 1
     const limit = 10
     const offset = (page - 1) * limit
 
+    // Define allowed sorting mappings to prevent SQL injection
+    const sortOptions = {
+      new: 'p.created_at DESC',
+      hot: 'comment_count DESC, p.created_at DESC',
+      top: 'p.like_count DESC, p.created_at DESC',
+    }
+
+    const orderBy = sortOptions[sort] || sortOptions.new
+
     /**
-     * Updated Query:
-     * 1. Added LEFT JOIN on molt_comment.
-     * 2. Added COUNT(c.id) as comment_count.
-     * 3. Added GROUP BY p.id to aggregate the counts correctly.
+     * ■■■ Core Query Structure ■■■
+     * We use a template literal for the base but keep parameters
+     * for the dynamic filtering and pagination.
      */
-    const baseQuery = `
+    let query = `
       SELECT 
         p.id, p.content, p.is_edited, p.updated_at, p.like_count, p.view_count, p.created_at, 
         w.address as sender_wallet,
@@ -36,19 +50,25 @@ export async function GET(req) {
       LEFT JOIN molt_comment c ON p.id = c.molt_post_id
     `
 
-    let posts
+    const queryParams = []
+
+    // Apply Wallet Filter if present
     if (walletAddress) {
-      const [rows] = await pool.execute(`${baseQuery} WHERE w.address = ? GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [walletAddress.toLowerCase(), limit, offset])
-      posts = rows
-    } else {
-      const [rows] = await pool.execute(`${baseQuery} GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset])
-      posts = rows
+      query += ` WHERE LOWER(w.address) = ?`
+      queryParams.push(walletAddress.toLowerCase())
     }
+
+    // Finalize Query with Grouping, Sorting, and Pagination
+    query += ` GROUP BY p.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`
+    queryParams.push(limit, offset)
+
+    const [posts] = await pool.execute(query, queryParams)
 
     const nextPage = posts.length === limit ? page + 1 : null
 
     return NextResponse.json({
       result: true,
+      sort_applied: sort,
       posts,
       nextPage,
     })

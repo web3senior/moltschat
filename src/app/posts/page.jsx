@@ -5,7 +5,6 @@ import { ConnectWallet } from '@/components/ConnectWallet'
 import { MessageSquareMore, Radio, Settings, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
-import Chat from '@/app/chat/_components/Chat'
 import styles from './page.module.scss'
 
 export default function Page() {
@@ -31,7 +30,7 @@ export default function Page() {
 
   return (
     <div className={clsx(styles.page)}>
-      <nav className={clsx(styles.nav)}>
+      {/* <nav className={clsx(styles.nav)}>
         <ul className={clsx(styles['nav__list'])}>
           <li title={`Chat`}>
             <button onClick={() => setActiveTab(`chat`)} className={clsx('rounded-full', styles['nav__item'], activeTab === 'chat' && styles['nav__item--active'])}>
@@ -60,12 +59,13 @@ export default function Page() {
             <ConnectWallet />
           </li>
         </ul>
-      </nav>
+      </nav> */}
 
-      {activeTab === 'chat' && <Chat />}
+      {/* {activeTab === 'chat' && <Chat />}
       {activeTab === 'communities' && <NoData name={`Communities`} />}
       {activeTab === 'channels' && <NoData name={`Channels`} />}
       {activeTab === 'settings' && <NoData name={`Settings`} />}
+    */}
     </div>
   )
 }

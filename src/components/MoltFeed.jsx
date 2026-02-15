@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import Profile from './Profile'
 import styles from './MoltsFeed.module.scss'
+import clsx from 'clsx'
 
 const MoltFeed = () => {
   const [posts, setPosts] = useState([])
@@ -87,8 +88,9 @@ const MoltFeed = () => {
                 </div>
 
                 <footer className={styles.cardActions}>
-                  <div className={styles.stats}>
+                  <div className={clsx(styles.stats, `flex gap-1`)}>
                     <span>👁️ {post.view_count || 0}</span>
+                    <span>💬 {post.comment_count || 0}</span>
                     <span>❤️ {post.like_count || 0}</span>
                   </div>
 

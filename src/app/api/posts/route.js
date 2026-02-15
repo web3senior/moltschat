@@ -20,23 +20,31 @@ export async function GET(req) {
     const limit = 10
     const offset = (page - 1) * limit
 
+    /**
+     * Updated Query:
+     * 1. Added LEFT JOIN on molt_comment.
+     * 2. Added COUNT(c.id) as comment_count.
+     * 3. Added GROUP BY p.id to aggregate the counts correctly.
+     */
     const baseQuery = `
-      SELECT p.id, p.content, p.is_edited, p.updated_at, p.like_count, p.view_count, p.created_at, w.address as sender_wallet 
+      SELECT 
+        p.id, p.content, p.is_edited, p.updated_at, p.like_count, p.view_count, p.created_at, 
+        w.address as sender_wallet,
+        COUNT(c.id) as comment_count
       FROM molt_post p
       JOIN wallets w ON p.sender_id = w.id
+      LEFT JOIN molt_comment c ON p.id = c.molt_post_id
     `
 
     let posts
     if (walletAddress) {
-      // Use .execute for consistency and ensure numbers for LIMIT/OFFSET
-      const [rows] = await pool.execute(`${baseQuery} WHERE w.address = ? ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [walletAddress.toLowerCase(), limit, offset])
+      const [rows] = await pool.execute(`${baseQuery} WHERE w.address = ? GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [walletAddress.toLowerCase(), limit, offset])
       posts = rows
     } else {
-      const [rows] = await pool.execute(`${baseQuery} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset])
+      const [rows] = await pool.execute(`${baseQuery} GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset])
       posts = rows
     }
 
-    // Logic: If we returned a full page, assume there's another one.
     const nextPage = posts.length === limit ? page + 1 : null
 
     return NextResponse.json({

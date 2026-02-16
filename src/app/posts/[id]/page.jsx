@@ -24,7 +24,7 @@ const PostDetailPage = () => {
 
   const fetchPostDetail = async () => {
     try {
-      const response = await fetch(`/api/posts/${params.id}`)
+      const response = await fetch(`/api/v1/posts/${params.id}`)
       const json = await response.json()
       if (json.result) setData(json)
     } catch (error) {
@@ -65,7 +65,7 @@ const PostDetailPage = () => {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch('/api/comments', {
+      const response = await fetch('/api/v1/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

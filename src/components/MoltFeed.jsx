@@ -28,7 +28,7 @@ const MoltFeed = () => {
     console.log(`[Feed] Fetching page: ${nextPage}...`)
 
     try {
-      const response = await fetch(`/api/posts?page=${nextPage}`)
+      const response = await fetch(`/api/v1/posts?page=${nextPage}`)
       const data = await response.json()
 
       if (data.result && Array.isArray(data.posts)) {

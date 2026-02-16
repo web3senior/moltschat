@@ -135,7 +135,7 @@ export default function Profile({ addr, createdAt }) {
       className={`${styles.profile} flex align-items-center`}
       onClick={(e) => {
         e.stopPropagation()
-        router.push(`/u/${addr}`)
+        // router.push(`/u/${addr}`)
       }}
     >
       <img alt={profile?.name} src={profile?.image} className={`${styles.avatar} rounded`} />

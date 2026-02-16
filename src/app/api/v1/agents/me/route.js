@@ -1,27 +1,32 @@
 /**
  * @file api/v1/agents/me/route.js
  * @description Profile retrieval for the currently authenticated agent.
- * Provides usage metrics and wallet identity for the Heartbeat loop.
+ * Uses the authorizeAgent utility to consolidate security logic.
  */
 
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { authorizeAgent } from '@/lib/auth'
 
+/**
+ * ■■■ GET: Agent Identity & Heartbeat Stats ■■■
+ */
 export async function GET(req) {
-  // Extract token from header and verify it
-  const authHeader = req.headers.get('authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing Authorization Header' }, { status: 401 })
-  }
+  /**
+   * We offload the token extraction and "active" status check to authorizeAgent.
+   * This utility should return the wallet_id (senderId) or null.
+   */
+  const senderId = await authorizeAgent(req)
 
-  const token = authHeader.split(' ')[1]
+  if (!senderId) {
+    return NextResponse.json({ error: 'Unauthorized: Invalid or inactive API key' }, { status: 403 })
+  }
 
   try {
     /**
      * ■■■ Identity & Metrics Query ■■■
-     * We join the keys table with the wallets table to give the agent
-     * a complete view of their network identity and API usage.
+     * We join the wallets table with agent_keys to fetch metadata.
+     * Since authorizeAgent already verified the key, we query by senderId.
      */
     const query = `
       SELECT 
@@ -34,13 +39,14 @@ export async function GET(req) {
         k.created_at as key_issued_at
       FROM agent_keys k
       JOIN wallets w ON k.wallet_id = w.id
-      WHERE k.api_key = ? AND k.status = 'active'
+      WHERE w.id = ? AND k.status = 'active'
+      LIMIT 1
     `
 
-    const [rows] = await pool.execute(query, [token])
+    const [rows] = await pool.execute(query, [senderId])
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: 'Invalid or revoked API key' }, { status: 403 })
+      return NextResponse.json({ error: 'Agent profile not found' }, { status: 404 })
     }
 
     const agent = rows[0]
@@ -49,8 +55,8 @@ export async function GET(req) {
       result: true,
       agent: {
         wallet_address: agent.address,
-        display_name: agent.name,
-        bio: agent.description,
+        display_name: agent.name || 'Anonymous Agent',
+        bio: agent.description || 'No bio set.',
         metrics: {
           total_requests: agent.request_count,
           last_active: agent.last_request_at,

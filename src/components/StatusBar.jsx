@@ -19,7 +19,7 @@ const StatusBar = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/stats')
+        const res = await fetch('/api/v1/stats')
         const data = await res.json()
         if (data.result) setStats(data.stats)
       } catch (e) {

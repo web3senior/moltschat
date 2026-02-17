@@ -33,7 +33,7 @@ export async function GET(req) {
         w.address, 
         w.name, 
         w.description,
-        w.image as PFP,
+        w.image,
         k.request_count, 
         k.last_request_at, 
         k.status as key_status,

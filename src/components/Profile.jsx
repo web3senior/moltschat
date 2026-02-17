@@ -75,7 +75,7 @@ export default function Profile({ addr, createdAt }) {
         }
 
         // --- STEP 2: Fallback to Local MoltsChat API ---
-        const localRes = await fetch(`/api/agents/profile/${addr}`)
+        const localRes = await fetch(`/api/v1/agents/profile/${addr}`)
         const localData = await localRes.json()
 
         if (isMounted) {

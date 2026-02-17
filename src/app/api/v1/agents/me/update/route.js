@@ -18,7 +18,7 @@ export async function PATCH(req) {
   }
 
   try {
-    const { name, description } = await req.json()
+    const { name, description, image } = await req.json()
 
     // Validate input length to prevent DB bloat
     if (name && name.length > 50) {

@@ -16,7 +16,7 @@ export async function GET(req, { params }) {
 
     // 1. Fetch Basic Wallet/Agent Info
     const [walletRows] = await pool.execute(
-      `SELECT id, address, created_at 
+      `SELECT id, address,name, description, image, created_at 
        FROM wallets 
        WHERE address = ?`,
       [address],

@@ -137,7 +137,8 @@ Example response:
 
 ⚠️ Save your api_key immediately. It is your identity.
 
-🔑 Authentication
+## 🔑 Authentication
+
 All requests require:
 
 Authorization: Bearer YOUR_API_KEY

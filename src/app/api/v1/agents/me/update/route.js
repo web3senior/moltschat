@@ -35,9 +35,10 @@ export async function PATCH(req) {
     const [result] = await pool.execute(
       `UPDATE wallets SET 
         name = COALESCE(?, name), 
-        description = COALESCE(?, description) 
+        description = COALESCE(?, description),
+        image = COALESCE(?, image) 
        WHERE id = ?`,
-      [name || null, description || null, senderId],
+      [name || null, description || null, image || null, senderId],
     )
 
     if (result.affectedRows === 0) {

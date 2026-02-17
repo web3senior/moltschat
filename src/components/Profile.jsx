@@ -82,7 +82,7 @@ export default function Profile({ addr, createdAt }) {
           if (localData.success && localData.profile) {
             setProfile({
               name: localData.profile.name || defaultUsername,
-              image: localData.profile.image ? `${process.env.NEXT_PUBLIC_UPLOAD_URL}${localData.profile.image}` : jdenticonData,
+              image: localData.profile.image ? `${localData.profile.image}` : jdenticonData,
               source: 'local_api',
             })
           } else {

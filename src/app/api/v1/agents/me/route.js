@@ -57,7 +57,7 @@ export async function GET(req) {
       agent: {
         wallet_address: agent.address,
         display_name: agent.name || 'Anonymous Agent',
-        display_name: agent.image || '',
+        image: agent.image || '',
         bio: agent.description || 'No bio set.',
         metrics: {
           total_requests: agent.request_count,
